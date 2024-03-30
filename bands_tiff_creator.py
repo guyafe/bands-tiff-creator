@@ -1,6 +1,7 @@
 import os
 import sys
 import tkinter.filedialog as fd
+from osgeo import gdal
 
 from jp2_file import Jp2File
 from resolution_dir import ResolutionDir
@@ -14,6 +15,7 @@ JP2_FILE_EXTENSION = '.jp2'
 JP2_FILE_NUMBER_OF_SPLITTED_TOKENS = 4
 JP2_FILE_BAND_TOKEN_INDEX = 2
 BAND_PREFIX = 'B'
+GEOTIFF_DRIVER_NAME = 'GTiff'
 
 
 def get_resolutions_dirs(dir_path):
@@ -49,12 +51,30 @@ def create_band_files(resolutions_dir):
     return jp2_band_files
 
 
-def create_tiff_files_for_resolution(resolutions_dir, date):
+def create_tiff_file_from_bands(jp2_band_files, tiff_file_name, resolution_dir):
+    print(f'Creating tiff file: {tiff_file_name} for resolution: {resolution_dir.name}')
+    for jp2_band_file in jp2_band_files:
+        print(jp2_band_file)
+    temp_vrt_file = os.path.join(resolution_dir.path, f'{tiff_file_name}.vrt')
+    full_tiff_file_path = os.path.join(resolution_dir.path, tiff_file_name)
+    vrt = gdal.BuildVRT(temp_vrt_file, [jp2_band_file.path for jp2_band_file in jp2_band_files], options='-separate')
+    gdal.Translate(full_tiff_file_path, vrt)
+    raster = gdal.Open(full_tiff_file_path)
+    index = 1
+    for jp2_band_file in jp2_band_files:
+        band_index = index
+        band = raster.GetRasterBand(band_index)
+        band.SetDescription(jp2_band_file.band)
+        index = index + 1
+    raster = None
+
+
+def create_tiff_file_for_resolution(resolutions_dir, date):
     print(f'Creating tiff files for resolution: {resolutions_dir.name}')
     tiff_file_name = f'sentinel_{resolutions_dir.name}_{date}.tiff'
     print(f'Tiff file name: {tiff_file_name}')
     jp2_band_files = create_band_files(resolutions_dir)
-    print(f'Found {len(jp2_band_files)} band files')
+    create_tiff_file_from_bands(jp2_band_files, tiff_file_name, resolutions_dir)
 
 
 def create_tiff_files(dir_path):
@@ -63,7 +83,7 @@ def create_tiff_files(dir_path):
     print(f'Creating tiff files for date: {date} in directory: {dir_path}')
     resolutions_dirs = get_resolutions_dirs(dir_path)
     for resolutions_dir in resolutions_dirs:
-        create_tiff_files_for_resolution(resolutions_dir, date)
+        create_tiff_file_for_resolution(resolutions_dir, date)
 
 
 def main():
